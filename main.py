@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go  # 선 굵기와 색상을 상세히 조절하기 위해 추가로 불러옵니다.
+import plotly.graph_objects as go
 
 # [1. 데이터 불러오기]
 @st.cache_data
@@ -81,17 +81,15 @@ st.divider() # 구역 나누는 가로선
 # --- 네 번째 그래프 구역 (극장가 전체 관객수 및 이동평균) ---
 st.header("4. 극장가 전체 관객수 흐름 (7일 이동평균)")
 
-# 1. 기준일자별로 박스오피스 TOP10 영화들의 '해당일관객수'를 모두 더합니다.
+# 기준일자별로 박스오피스 TOP10 영화들의 '해당일관객수'를 모두 더합니다.
 daily_total = df.groupby("기준일자")["해당일관객수"].sum().reset_index()
 
-# 2. 7일 이동평균을 계산합니다. (최근 7일치의 평균을 구해 요일별로 튀는 값을 부드럽게 깎아줍니다.)
-# min_periods=1을 넣으면 첫 1~6일차 데이터도 비워두지 않고 가능한 개수만큼 평균을 냅니다.
+# 7일 이동평균 계산
 daily_total["7일_이동평균"] = daily_total["해당일관객수"].rolling(window=7, min_periods=1).mean()
 
-# 3. 빈 도화지(Figure)를 만들고 그 위에 두 개의 선을 겹쳐 그립니다.
 fig4 = go.Figure()
 
-# 원본 합계 선 (연한 회색, 얇게)
+# 원본 합계 선
 fig4.add_trace(go.Scatter(
     x=daily_total["기준일자"], 
     y=daily_total["해당일관객수"],
@@ -100,7 +98,7 @@ fig4.add_trace(go.Scatter(
     line=dict(color="lightgray", width=1.5)
 ))
 
-# 7일 이동평균 선 (파란색, 진하고 두껍게)
+# 7일 이동평균 선
 fig4.add_trace(go.Scatter(
     x=daily_total["기준일자"], 
     y=daily_total["7일_이동평균"],
@@ -109,10 +107,87 @@ fig4.add_trace(go.Scatter(
     line=dict(color="royalblue", width=3)
 ))
 
-# 그래프의 제목과 축 이름을 깔끔하게 설정해줍니다.
 fig4.update_layout(title="전체 관객수 및 7일 이동평균 추이", xaxis_title="기준일자", yaxis_title="관객수")
-
-# 스트림릿에 그래프 출력
 st.plotly_chart(fig4, use_container_width=True)
 
 st.caption("💡 **이 그래프로 알 수 있는 것:** (예시: 매주 주말마다 관객수가 치솟는 뾰족한 현상(연한 선)에 가려진, 실제 극장가의 전반적인 관객수 상승·하락 흐름(진한 선)을 정확히 파악할 수 있다.)")
+
+
+st.divider() # 구역 나누는 가로선
+
+
+# --- 다섯 번째 그래프 구역 (월별 총 관객수 막대그래프) ---
+st.header("5. 월별 총 관객수 비교")
+
+# daily_total 데이터의 기준일자에서 '연-월(YYYY-MM)' 추출
+daily_total["연월"] = daily_total["기준일자"].dt.strftime("%Y-%m")
+
+# 월 단위 그룹화
+monthly_total = daily_total.groupby("연월")["해당일관객수"].sum().reset_index()
+
+fig5 = px.bar(
+    monthly_total, 
+    x="연월", 
+    y="해당일관객수", 
+    title="월별 극장 전체 관객수 합계",
+    text_auto=".2s"
+)
+fig5.update_layout(xaxis_title="월(Year-Month)", yaxis_title="총 관객수")
+st.plotly_chart(fig5, use_container_width=True)
+
+st.caption("💡 **이 그래프로 알 수 있는 것:** (예시: 월별 전체 관객수 합계를 통해 연중 극장가의 최대 성수기(여름/겨울 방학, 연말 등)와 비수기가 언제였는지 한눈에 비교할 수 있다.)")
+
+
+st.divider() # 구역 나누는 가로선
+
+
+# --- 여섯 번째 그래프 구역 (캘린더 히트맵) ---
+st.header("6. 요일 및 주차별 관객수 분포 (캘린더 히트맵)")
+
+# 1. 요일 이름 및 순서 정의 (월요일 ~ 일요일)
+days_order = ["월", "화", "수", "목", "금", "토", "일"]
+day_map = {0: "월", 1: "화", 2: "수", 3: "목", 4: "금", 5: "토", 6: "일"}
+
+# 2. 요일 컬럼 생성
+daily_total["요일"] = daily_total["기준일자"].dt.dayofweek.map(day_map)
+
+# 3. 월별 주차(Week of Month) 계산 함수
+def get_week_of_month(dt):
+    first_day = dt.replace(day=1)
+    adjusted_dom = dt.day + first_day.weekday()
+    return (adjusted_dom - 1) // 7 + 1
+
+daily_total["주차"] = daily_total["기준일자"].apply(get_week_of_month)
+
+# Y축에 표기할 '연-월 주차' 라벨 및 마우스 오버용 날짜 문자열(YYYY-MM-DD) 생성
+daily_total["연월_주차"] = daily_total["기준일자"].dt.strftime("%Y-%m") + " " + daily_total["주차"].astype(str) + "주차"
+daily_total["날짜_str"] = daily_total["기준일자"].dt.strftime("%Y-%m-%d")
+
+# 4. 히트맵 생성을 위한 피벗 테이블(Pivot Table) 작성
+# Z축: 해당일 관객수 합계
+pivot_audience = daily_total.pivot(index="연월_주차", columns="요일", values="해당일관객수").reindex(columns=days_order)
+
+# 마우스 오버 툴팁용: YYYY-MM-DD 날짜
+pivot_date = daily_total.pivot(index="연월_주차", columns="요일", values="날짜_str").reindex(columns=days_order)
+
+# 5. Plotly Heatmap 그리기
+fig6 = go.Figure(data=go.Heatmap(
+    z=pivot_audience.values,
+    x=days_order,
+    y=pivot_audience.index,
+    text=pivot_date.values, # 마우스 오버 시 출력할 yyyy-mm-dd 날짜 데이터
+    hovertemplate="<b>날짜: %{text}</b><br>요일: %{x}요일<br>관객수: %{z:,.0f}명<extra></extra>",
+    colorscale="Reds", # 관객수가 많을수록 붉은색이 진해짐
+))
+
+# 위에서 아래로 시간 순서(주차)가 흐르도록 Y축 정렬 설정
+fig6.update_layout(
+    title="일별 관객수 캘린더 히트맵",
+    xaxis_title="요일",
+    yaxis_title="월 / 주차",
+    yaxis=dict(autorange="reversed")
+)
+
+st.plotly_chart(fig6, use_container_width=True)
+
+st.caption("💡 **이 그래프로 알 수 있는 것:** (예시: 주말(토, 일)과 특정 연휴 기간에 관객수가 붉게 집중되는 패턴을 확인할 수 있으며, 타일 위에 마우스를 올려 정확한 날짜(YYYY-MM-DD)별 관객수를 바로 파악할 수 있다.)")
