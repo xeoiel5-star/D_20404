@@ -21,6 +21,9 @@ def load_data():
     df["main_genre"] = (
         df["genre"].dropna().astype(str).apply(lambda x: x.split("|")[0])
     )
+
+    # 트리맵 중복 오류 방지 (장르 + 영화명 중복 제거)
+    df = df.drop_duplicates(subset=["main_genre", "movieNm"])
     return df
 
 
@@ -32,9 +35,7 @@ df = load_data()
 st.header("1. 장르별 영화 편수 분포")
 
 # 장르별 영화 수 집계
-genre_counts = (
-    df["main_genre"].value_counts().reset_index(name="count")
-)
+genre_counts = df["main_genre"].value_counts().reset_index(name="count")
 genre_counts.columns = ["genre", "count"]
 
 # Plotly 도넛 차트 생성
@@ -61,9 +62,30 @@ st.write(
     "박스오피스 상위권 영화 중 특정 주요 장르가 차지하는 비중과 장르별 편수 분포를 한눈에 비교할 수 있습니다."
 )
 st.divider()
-# ── 그래프 2. 장르 안의 영화 (트리맵) ──
+
+# ---------------------------------------------------------
+# 2. 장르 안의 영화 (트리맵)
+# ---------------------------------------------------------
 st.header("2. 장르 안의 영화 (트리맵)")
-fig2 = px.treemap(df, path=["장르", "movieNm"], values="total_audi",
-                  hover_data=["total_audi"])
-st.plotly_chart(fig2, width="stretch")
-st.caption("이 그래프로 알 수 있는 것: (한 문장으로 적어 보세요)")
+
+# path에 main_genre 사용
+fig2 = px.treemap(
+    df,
+    path=["main_genre", "movieNm"],
+    values="total_audi",
+    title="장르 및 영화별 총 관객 수 분포",
+)
+
+# 마우스 호버 시 영화명과 총 관객 수 표시
+fig2.update_traces(
+    hovertemplate="<b>영화명/장르: %{label}</b><br>총 관객 수: %{value:,.0f}명"
+)
+
+st.plotly_chart(fig2, use_container_width=True)
+
+st.divider()
+st.subheader("💡 이 그래프로 알 수 있는 것")
+st.write(
+    "장르별 전체 관객 수 규모와 각 장르 내에서 어떤 영화가 관객 수를 가장 많이 모았는지 면적 크기로 비교할 수 있습니다."
+)
+st.divider()
