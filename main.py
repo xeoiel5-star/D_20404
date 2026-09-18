@@ -17,13 +17,21 @@ def load_data():
     url = "https://raw.githubusercontent.com/greatsong/modudata/main/data/kobis_movies.csv"
     df = pd.read_csv(url)
 
-    # 장르가 세로막대 기호(|)로 분리되어 있는 경우 첫 번째 장르만 추출
+    # 1. 영화코드 및 필수 데이터 결측치 제거
+    df = df.dropna(subset=["movieCd", "movieNm", "total_audi"])
+
+    # 2. 장르가 세로막대 기호(|)로 분리되어 있는 경우 첫 번째 장르만 추출
     df["main_genre"] = (
         df["genre"].dropna().astype(str).apply(lambda x: x.split("|")[0])
     )
+    df["main_genre"] = df["main_genre"].fillna("미분류")
 
-    # 트리맵 중복 오류 방지 (장르 + 영화명 중복 제거)
-    df = df.drop_duplicates(subset=["main_genre", "movieNm"])
+    # 3. 고유 식별자(movieCd) 기준 완전 중복 제거
+    df = df.drop_duplicates(subset=["movieCd"])
+
+    # 4. 영화명이 중복되더라도 트리맵에서 고유 노드로 인식하도록 식별용 컬럼 생성
+    df["movie_label"] = df["movieNm"] + " (" + df["movieCd"].astype(str) + ")"
+
     return df
 
 
@@ -39,7 +47,7 @@ genre_counts = df["main_genre"].value_counts().reset_index(name="count")
 genre_counts.columns = ["genre", "count"]
 
 # Plotly 도넛 차트 생성
-fig = px.pie(
+fig1 = px.pie(
     genre_counts,
     names="genre",
     values="count",
@@ -48,12 +56,12 @@ fig = px.pie(
 )
 
 # 호버 시 편수(value)와 비율(percent) 모두 표시
-fig.update_traces(
+fig1.update_traces(
     hovertemplate="<b>장르: %{label}</b><br>편수: %{value}편<br>비율: %{percent}"
 )
 
 # 그래프 출력
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig1, use_container_width=True)
 
 # 시각화 해석 영역
 st.divider()
@@ -68,24 +76,27 @@ st.divider()
 # ---------------------------------------------------------
 st.header("2. 장르 안의 영화 (트리맵)")
 
-# path에 main_genre 사용
+# 고유 컬럼(movie_label)을 경로로 사용하고, 화면 표시 이름은 movieNm으로 지정
 fig2 = px.treemap(
     df,
-    path=["main_genre", "movieNm"],
+    path=["main_genre", "movie_label"],
     values="total_audi",
     title="장르 및 영화별 총 관객 수 분포",
+    hover_data={"movieNm": True, "total_audi": ":,.0f", "movie_label": False},
 )
 
-# 마우스 호버 시 영화명과 총 관객 수 표시
+# 호버 서식 및 라벨 설정
 fig2.update_traces(
-    hovertemplate="<b>영화명/장르: %{label}</b><br>총 관객 수: %{value:,.0f}명"
+    hovertemplate="<b>영화명: %{customdata[0]}</b><br>총 관객 수: %{value:,.0f}명"
 )
 
+# 그래프 출력
 st.plotly_chart(fig2, use_container_width=True)
 
+# 시각화 해석 영역
 st.divider()
 st.subheader("💡 이 그래프로 알 수 있는 것")
 st.write(
-    "장르별 전체 관객 수 규모와 각 장르 내에서 어떤 영화가 관객 수를 가장 많이 모았는지 면적 크기로 비교할 수 있습니다."
+    "장르 전체에서 각 장르와 개별 영화가 차지하는 총 관객 수 비중을 면적 크기로 직관적으로 파악할 수 있습니다."
 )
 st.divider()
