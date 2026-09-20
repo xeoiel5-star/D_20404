@@ -18,7 +18,15 @@ def load_data():
     df = pd.read_csv(url)
 
     # 1. 필수 데이터 결측치 제거
-    df = df.dropna(subset=["movieCd", "movieNm", "total_audi", "first_scrn"])
+    df = df.dropna(
+        subset=[
+            "movieCd",
+            "movieNm",
+            "total_audi",
+            "first_scrn",
+            "first_week_audi",
+        ]
+    )
 
     # 2. 장르 첫 번째 값만 추출
     df["main_genre"] = (
@@ -166,20 +174,18 @@ st.divider()
 # ---------------------------------------------------------
 st.header("5. 주요 장르별 총 관객 수 분포 (상자 그림)")
 
-# 영화 수가 10편 이상인 장르 필터링
 genre_counts_series = df["main_genre"].value_counts()
 top_genres = genre_counts_series[genre_counts_series >= 10].index
 
 df_top_genres = df[df["main_genre"].isin(top_genres)]
 
-# 박스플롯 생성 (hover_name 지정으로 아웃라이어에 영화명 표시)
 fig5 = px.box(
     df_top_genres,
     x="main_genre",
     y="total_audi",
     color="main_genre",
     hover_name="movieNm",
-    points="outliers",  # 이상치(상자 밖 점) 표시
+    points="outliers",
     title="영화 10편 이상 장르의 총 관객 수 분포 (박스플롯)",
     labels={
         "main_genre": "장르",
@@ -197,5 +203,45 @@ st.divider()
 st.subheader("💡 이 그래프로 알 수 있는 것")
 st.write(
     "주요 장르별 관객 수의 중앙값과 범위를 비교하여 흥행의 안정성을 확인하고, 상자 밖으로 벗어난 아웃라이어 점을 통해 특정 장르의 대박 흥행작을 한눈에 식별할 수 있습니다."
+)
+st.divider()
+
+# ---------------------------------------------------------
+# 6. 개봉일 스크린 수, 총 관객 수, 첫 주 관객 수 (버블 그래프)
+# ---------------------------------------------------------
+st.header("6. 스크린 수, 총 관객 수, 첫 주 관객 수의 관계 (버블 차트)")
+
+# 버블 차트 생성 (size = first_week_audi)
+fig6 = px.scatter(
+    df,
+    x="first_scrn",
+    y="total_audi",
+    size="first_week_audi",
+    color="main_genre",
+    hover_name="movieNm",
+    title="개봉일 스크린 수 vs 총 관객 수 (버블 크기: 개봉 첫 주 관객 수)",
+    labels={
+        "first_scrn": "개봉일 스크린 수(개)",
+        "total_audi": "총 관객 수(명)",
+        "first_week_audi": "개봉 첫 주 관객 수(명)",
+        "main_genre": "장르",
+    },
+    size_max=50,  # 버블 최대 크기 지정
+)
+
+# 마우스 호버 정보 설정
+fig6.update_traces(
+    hovertemplate="<b>영화명: %{hovertext}</b><br>"
+    + "개봉일 스크린 수: %{x:,.0f}개<br>"
+    + "총 관객 수: %{y:,.0f}명<br>"
+    + "개봉 첫 주 관객 수: %{marker.size:,.0f}명"
+)
+
+st.plotly_chart(fig6, use_container_width=True)
+
+st.divider()
+st.subheader("💡 이 그래프로 알 수 있는 것")
+st.write(
+    "개봉일 스크린 수(X축)와 총 관객 수(Y축)에 더해 **개봉 첫 주 관객 수(버블 크기)**까지 함께 비교함으로써, 초기 흥행(첫 주 관객)이 최종 흥행으로 연결되는 양상을 다차원적으로 분석할 수 있습니다."
 )
 st.divider()
