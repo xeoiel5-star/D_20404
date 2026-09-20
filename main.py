@@ -18,7 +18,7 @@ def load_data():
     df = pd.read_csv(url)
 
     # 1. 필수 데이터 결측치 제거
-    df = df.dropna(subset=["movieCd", "movieNm", "total_audi"])
+    df = df.dropna(subset=["movieCd", "movieNm", "total_audi", "first_scrn"])
 
     # 2. 장르 첫 번째 값만 추출
     df["main_genre"] = (
@@ -97,7 +97,6 @@ st.divider()
 # ---------------------------------------------------------
 st.header("3. 총 관객 수 분포 히스토그램")
 
-# 히스토그램 생성
 fig3 = px.histogram(
     df,
     x="total_audi",
@@ -114,13 +113,11 @@ fig3.update_traces(
 
 st.plotly_chart(fig3, use_container_width=True)
 
-# ── 데이터 자동 계산 (텍스트 출력용) ──
-# 1. 가장 관객이 많은 영화 데이터
+# 데이터 자동 계산 (텍스트 출력용)
 max_audi_movie = df.loc[df["total_audi"].idxmax()]
 max_title = max_audi_movie["movieNm"]
 max_audi_val = max_audi_movie["total_audi"]
 
-# 2. 가장 집중된 구간 계산 (300만 미만 집중 여부)
 under_3m_count = len(df[df["total_audi"] < 3000000])
 under_3m_ratio = (under_3m_count / len(df)) * 100
 
@@ -129,5 +126,39 @@ st.subheader("💡 이 그래프로 알 수 있는 것")
 st.write(
     f"대부분의 영화({under_3m_ratio:.1f}%)가 **총 관객 수 300만 명 미만 구간**에 밀집해 있으며, "
     f"가장 관객이 많은 영화는 **'{max_title}'**(약 {max_audi_val:,.0f}명)입니다."
+)
+st.divider()
+
+# ---------------------------------------------------------
+# 4. 개봉일 스크린 수와 총 관객 수의 관계 (산점도)
+# ---------------------------------------------------------
+st.header("4. 개봉일 스크린 수와 총 관객 수의 상관관계")
+
+# 산점도 생성: x=개봉일 스크린 수, y=총 관객 수, 색상=장르별
+fig4 = px.scatter(
+    df,
+    x="first_scrn",
+    y="total_audi",
+    color="main_genre",
+    hover_name="movieNm",
+    title="개봉일 스크린 수 vs 총 관객 수 관계",
+    labels={
+        "first_scrn": "개봉일 스크린 수(개)",
+        "total_audi": "총 관객 수(명)",
+        "main_genre": "장르",
+    },
+)
+
+# 마우스 호버 정보 설정 (영화명, 스크린 수, 총 관객 수)
+fig4.update_traces(
+    hovertemplate="<b>영화명: %{hovertext}</b><br>개봉일 스크린 수: %{x:,.0f}개<br>총 관객 수: %{y:,.0f}명"
+)
+
+st.plotly_chart(fig4, use_container_width=True)
+
+st.divider()
+st.subheader("💡 이 그래프로 알 수 있는 것")
+st.write(
+    "개봉 초기에 확보한 스크린 수가 많을수록 대체로 최종 총 관객 수가 늘어나는 **양의 상관관계**를 볼 수 있으며, 장르별 스크린 배정 규모 및 흥행 성과 차이도 비교할 수 있습니다."
 )
 st.divider()
