@@ -28,11 +28,13 @@ def load_data():
         ]
     )
 
-    # 2. 장르 첫 번째 값만 추출
+    # 2. 장르 및 국가 결측치 처리
     df["main_genre"] = (
         df["genre"].dropna().astype(str).apply(lambda x: x.split("|")[0])
     )
     df["main_genre"] = df["main_genre"].fillna("미분류")
+
+    df["nation"] = df["nation"].fillna("기타")
 
     # 3. 고유 식별자(movieCd) 기준 중복 제거
     df = df.drop_duplicates(subset=["movieCd"])
@@ -211,7 +213,6 @@ st.divider()
 # ---------------------------------------------------------
 st.header("6. 스크린 수, 총 관객 수, 첫 주 관객 수의 관계 (버블 차트)")
 
-# 버블 차트 생성 (size = first_week_audi)
 fig6 = px.scatter(
     df,
     x="first_scrn",
@@ -226,10 +227,9 @@ fig6 = px.scatter(
         "first_week_audi": "개봉 첫 주 관객 수(명)",
         "main_genre": "장르",
     },
-    size_max=50,  # 버블 최대 크기 지정
+    size_max=50,
 )
 
-# 마우스 호버 정보 설정
 fig6.update_traces(
     hovertemplate="<b>영화명: %{hovertext}</b><br>"
     + "개봉일 스크린 수: %{x:,.0f}개<br>"
@@ -243,5 +243,30 @@ st.divider()
 st.subheader("💡 이 그래프로 알 수 있는 것")
 st.write(
     "개봉일 스크린 수(X축)와 총 관객 수(Y축)에 더해 **개봉 첫 주 관객 수(버블 크기)**까지 함께 비교함으로써, 초기 흥행(첫 주 관객)이 최종 흥행으로 연결되는 양상을 다차원적으로 분석할 수 있습니다."
+)
+st.divider()
+
+# ---------------------------------------------------------
+# 7. 제작 국가 및 장르별 영화 편수 (선버스트 그래프)
+# ---------------------------------------------------------
+st.header("7. 제작 국가 및 장르별 영화 편수 분포 (선버스트)")
+
+# 국가(nation) -> 장르(main_genre) 순으로 계층 구조 구성, 편수 카운트
+fig7 = px.sunburst(
+    df,
+    path=["nation", "main_genre"],
+    title="제작 국가 및 장르별 영화 편수 분포",
+)
+
+fig7.update_traces(
+    hovertemplate="<b>구분: %{label}</b><br>영화 편수: %{value}편<br>비율: %{percentParent:.1%}"
+)
+
+st.plotly_chart(fig7, use_container_width=True)
+
+st.divider()
+st.subheader("💡 이 그래프로 알 수 있는 것")
+st.write(
+    "제작 국가(내부 링)와 그 안의 장르(외부 링) 계층 구조를 통해, 특정 국가에서 어떤 장르의 영화가 주로 수입되거나 제작되어 박스오피스 상위권에 진입했는지 영화 편수 비율로 확인할 수 있습니다."
 )
 st.divider()
