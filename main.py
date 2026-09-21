@@ -251,7 +251,6 @@ st.divider()
 # ---------------------------------------------------------
 st.header("7. 제작 국가 및 장르별 영화 편수 분포 (선버스트)")
 
-# 국가(nation) -> 장르(main_genre) 순으로 계층 구조 구성, 편수 카운트
 fig7 = px.sunburst(
     df,
     path=["nation", "main_genre"],
@@ -268,5 +267,64 @@ st.divider()
 st.subheader("💡 이 그래프로 알 수 있는 것")
 st.write(
     "제작 국가(내부 링)와 그 안의 장르(외부 링) 계층 구조를 통해, 특정 국가에서 어떤 장르의 영화가 주로 수입되거나 제작되어 박스오피스 상위권에 진입했는지 영화 편수 비율로 확인할 수 있습니다."
+)
+st.divider()
+
+# ---------------------------------------------------------
+# 8. 한 국가에서 영화 편수당 총 관객 수는 어떻게 될까? (막대 그래프)
+# ---------------------------------------------------------
+title_q8 = "한 국가에서 영화 편수당 총 관객 수는 어떻게 될까?"
+st.header(f"8. {title_q8}")
+
+# 국가별 총 관객 수, 개봉 편수, 평균 관객 수 집계
+nation_stats = (
+    df.groupby("nation")
+    .agg(
+        total_audi=("total_audi", "sum"),
+        movie_count=("movieCd", "count"),
+        avg_audi=("total_audi", "mean"),
+    )
+    .reset_index()
+)
+
+# 평균 관객 수 내림차순 정렬
+nation_stats = nation_stats.sort_values(by="avg_audi", ascending=False)
+
+fig8 = px.bar(
+    nation_stats,
+    x="nation",
+    y="avg_audi",
+    color="avg_audi",
+    title=title_q8,
+    labels={
+        "nation": "제작 국가",
+        "avg_audi": "편당 평균 관객 수(명)",
+        "total_audi": "총 관객 수(명)",
+        "movie_count": "개봉 영화 편수(편)",
+    },
+    hover_data={
+        "total_audi": ":,.0f",
+        "movie_count": True,
+        "avg_audi": ":,.0f",
+    },
+    color_continuous_scale="Viridis",
+)
+
+fig8.update_traces(
+    hovertemplate="<b>국가: %{x}</b><br>"
+    + "편당 평균 관객 수: %{y:,.0f}명<br>"
+    + "총 개봉 편수: %{customdata[1]}편<br>"
+    + "합계 관객 수: %{customdata[0]:,.0f}명"
+)
+
+fig8.update_layout(coloraxis_showscale=False)
+
+st.plotly_chart(fig8, use_container_width=True)
+
+st.divider()
+st.subheader("💡 이 그래프로 알 수 있는 것")
+st.write(
+    "개봉 편수가 많은 국가라도 영화 1편당 끌어모은 평균 관객 수(흥행 효율)는 다를 수 있습니다. "
+    "국가별 평균 동원력을 비교함으로써 특정 국가 영화의 국내 흥행 영향력과 알짜 흥행 여부를 파악할 수 있습니다."
 )
 st.divider()
