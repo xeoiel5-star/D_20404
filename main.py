@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import streamlit as st
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
@@ -11,6 +10,12 @@ from sklearn.metrics import (
     mean_absolute_error,
     mean_absolute_percentage_error,
 )
+
+try:
+    import matplotlib.pyplot as plt
+    HAS_MPL = True
+except ModuleNotFoundError:
+    HAS_MPL = False
 
 # ---------------------------------------------------------
 # 1. 페이지 기본 설정
@@ -182,24 +187,33 @@ with tab1:
         (test_df["carat"] >= carat * 0.90) & (test_df["carat"] <= carat * 1.10)
     ]
     if len(similar_df) >= 10:
-        fig, ax = plt.subplots(figsize=(9, 3.6))
-        ax.hist(similar_df["price"], bins=30, color="#4c72b0", alpha=0.65, edgecolor="white")
-        ax.axvline(
-            pred_usd_val,
-            color="#d62728",
-            linestyle="--",
-            linewidth=2.2,
-            label=f"Predicted Price: ${pred_usd_val:,.0f}",
-        )
-        ax.set_title(
-            f"Price Distribution of Similar Carat Diamonds ({carat*0.9:.2f}ct ~ {carat*1.1:.2f}ct, n={len(similar_df)})"
-        )
-        ax.set_xlabel("Actual Market Price (USD)")
-        ax.set_ylabel("Count")
-        ax.legend()
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
+        if HAS_MPL:
+            fig, ax = plt.subplots(figsize=(9, 3.6))
+            ax.hist(similar_df["price"], bins=30, color="#4c72b0", alpha=0.65, edgecolor="white")
+            ax.axvline(
+                pred_usd_val,
+                color="#d62728",
+                linestyle="--",
+                linewidth=2.2,
+                label=f"Predicted Price: ${pred_usd_val:,.0f}",
+            )
+            ax.set_title(
+                f"Price Distribution of Similar Carat Diamonds ({carat*0.9:.2f}ct ~ {carat*1.1:.2f}ct, n={len(similar_df)})"
+            )
+            ax.set_xlabel("Actual Market Price (USD)")
+            ax.set_ylabel("Count")
+            ax.legend()
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
+        else:
+            st.subheader(f"유사 중량대({carat*0.9:.2f}ct ~ {carat*1.1:.2f}ct, n={len(similar_df)}) 실제 가격 분포")
+            counts, bin_edges = np.histogram(similar_df["price"], bins=20)
+            hist_df = pd.DataFrame({
+                "Price Range ($)": [f"${int(bin_edges[i]):,}~${int(bin_edges[i+1]):,}" for i in range(len(counts))],
+                "Count": counts,
+            }).set_index("Price Range ($)")
+            st.bar_chart(hist_df)
 
 # === TAB 2: 모델 성능 & 잔차 분석 ===
 with tab2:
@@ -212,33 +226,50 @@ with tab2:
     m5.metric("MAPE (백분율 오차)", f"{metrics['mape_pct']:.2f}%")
 
     c1, c2 = st.columns(2)
-    with c1:
-        fig1, ax1 = plt.subplots(figsize=(6, 4.5))
-        ax1.scatter(test_df["price"], pred_test_usd, alpha=0.15, s=8, color="#2b5c8f")
-        ax1.plot([0, 20000], [0, 20000], "r--", lw=1.5, label="Ideal Fit (y = x)")
-        ax1.set_xlim(0, 20000)
-        ax1.set_ylim(0, 22000)
-        ax1.set_title(f"Actual vs Predicted Price (R2 = {metrics['r2_usd']:.4f})")
-        ax1.set_xlabel("Actual Price (USD)")
-        ax1.set_ylabel("Predicted Price (USD)")
-        ax1.legend()
-        plt.tight_layout()
-        st.pyplot(fig1)
-        plt.close(fig1)
+    if HAS_MPL:
+        with c1:
+            fig1, ax1 = plt.subplots(figsize=(6, 4.5))
+            ax1.scatter(test_df["price"], pred_test_usd, alpha=0.15, s=8, color="#2b5c8f")
+            ax1.plot([0, 20000], [0, 20000], "r--", lw=1.5, label="Ideal Fit (y = x)")
+            ax1.set_xlim(0, 20000)
+            ax1.set_ylim(0, 22000)
+            ax1.set_title(f"Actual vs Predicted Price (R2 = {metrics['r2_usd']:.4f})")
+            ax1.set_xlabel("Actual Price (USD)")
+            ax1.set_ylabel("Predicted Price (USD)")
+            ax1.legend()
+            plt.tight_layout()
+            st.pyplot(fig1)
+            plt.close(fig1)
 
-    with c2:
-        fig2, ax2 = plt.subplots(figsize=(6, 4.5))
-        ax2.scatter(pred_test_log, resid_log, alpha=0.15, s=8, color="#2ca02c")
-        ax2.axhline(0, color="#d62728", linestyle="--", lw=1.5, label="Zero Residual")
-        ax2.axhline(2 * metrics["rmse_log"], color="gray", linestyle=":", lw=1.0, label="±2 SD")
-        ax2.axhline(-2 * metrics["rmse_log"], color="gray", linestyle=":", lw=1.0)
-        ax2.set_title("Residuals vs Fitted (Log Scale)")
-        ax2.set_xlabel("Predicted log(Price)")
-        ax2.set_ylabel("Residual (Actual - Predicted)")
-        ax2.legend()
-        plt.tight_layout()
-        st.pyplot(fig2)
-        plt.close(fig2)
+        with c2:
+            fig2, ax2 = plt.subplots(figsize=(6, 4.5))
+            ax2.scatter(pred_test_log, resid_log, alpha=0.15, s=8, color="#2ca02c")
+            ax2.axhline(0, color="#d62728", linestyle="--", lw=1.5, label="Zero Residual")
+            ax2.axhline(2 * metrics["rmse_log"], color="gray", linestyle=":", lw=1.0, label="±2 SD")
+            ax2.axhline(-2 * metrics["rmse_log"], color="gray", linestyle=":", lw=1.0)
+            ax2.set_title("Residuals vs Fitted (Log Scale)")
+            ax2.set_xlabel("Predicted log(Price)")
+            ax2.set_ylabel("Residual (Actual - Predicted)")
+            ax2.legend()
+            plt.tight_layout()
+            st.pyplot(fig2)
+            plt.close(fig2)
+    else:
+        sample_idx = np.random.RandomState(42).choice(len(test_df), size=min(1500, len(test_df)), replace=False)
+        with c1:
+            st.caption("실제 가격 vs 예측 가격 (USD)")
+            scatter_df1 = pd.DataFrame({
+                "Actual Price ($)": test_df["price"].iloc[sample_idx].values,
+                "Predicted Price ($)": pred_test_usd[sample_idx],
+            })
+            st.scatter_chart(scatter_df1, x="Actual Price ($)", y="Predicted Price ($)")
+        with c2:
+            st.caption("예측값 vs 잔차 (Log Scale)")
+            scatter_df2 = pd.DataFrame({
+                "Predicted log(Price)": pred_test_log[sample_idx],
+                "Residual (log)": resid_log.iloc[sample_idx].values,
+            })
+            st.scatter_chart(scatter_df2, x="Predicted log(Price)", y="Residual (log)")
 
     st.caption(
         "잔차 진단 요약: 로그 스케일 잔차는 평균 0을 중심으로 대칭을 이루며(전체 표본의 95.8%가 ±2 SD 이내), "
@@ -254,19 +285,21 @@ with tab3:
     )
 
     grade_df = coef_df[coef_df["Feature"].str.startswith(("cut_", "color_", "clarity_"))].copy()
-    colors_bar = [
-        "#4c72b0" if f.startswith("cut_") else ("#dd8452" if f.startswith("color_") else "#55a868")
-        for f in grade_df["Feature"]
-    ]
-
-    fig3, ax3 = plt.subplots(figsize=(10, 5.5))
-    ax3.barh(grade_df["Feature"], grade_df["Premium vs Baseline (%)"], color=colors_bar)
-    ax3.set_title("Price Premium vs Baseline Grade (Fair / J / I1)")
-    ax3.set_xlabel("Price Increase (%)")
-    ax3.grid(axis="x", linestyle="--", alpha=0.4)
-    plt.tight_layout()
-    st.pyplot(fig3)
-    plt.close(fig3)
+    if HAS_MPL:
+        colors_bar = [
+            "#4c72b0" if f.startswith("cut_") else ("#dd8452" if f.startswith("color_") else "#55a868")
+            for f in grade_df["Feature"]
+        ]
+        fig3, ax3 = plt.subplots(figsize=(10, 5.5))
+        ax3.barh(grade_df["Feature"], grade_df["Premium vs Baseline (%)"], color=colors_bar)
+        ax3.set_title("Price Premium vs Baseline Grade (Fair / J / I1)")
+        ax3.set_xlabel("Price Increase (%)")
+        ax3.grid(axis="x", linestyle="--", alpha=0.4)
+        plt.tight_layout()
+        st.pyplot(fig3)
+        plt.close(fig3)
+    else:
+        st.bar_chart(grade_df.set_index("Feature")["Premium vs Baseline (%)"])
 
     with st.expander("전체 회귀 계수 상세 표 보기"):
         st.dataframe(
