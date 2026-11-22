@@ -1,330 +1,53 @@
-import pandas as pd
-import plotly.express as px
 import streamlit as st
+import pandas as pd
+import numpy as np
+import joblib
 
-# 페이지 기본 설정
-st.set_page_config(
-    page_title="영화 데이터 그래프 도감 2 - 분포와 관계", layout="wide"
-)
+# 1. 모델 및 메타데이터 로드
+@st.cache_resource
+def load_model():
+    return joblib.load('diamond_price_model.joblib')
 
-st.title("영화 데이터 그래프 도감 2 - 분포와 관계")
-st.write("1년간 박스오피스 Top 10에 든 개봉 영화 216편의 데이터 시각화")
+artifact = load_model()
+model = artifact['model']
+feature_cols = artifact['feature_cols']
 
+# 2. 웹앱 화면 구성
+st.title("💎 다이아몬드 가격 예측기")
+st.write("다이아몬드의 4C 및 연마 비율을 입력하면 머신러닝 모델이 적정 가격(USD)을 예측합니다.")
 
-# 데이터 로드 및 전처리
-@st.cache_data
-def load_data():
-    url = "https://raw.githubusercontent.com/greatsong/modudata/main/data/kobis_movies.csv"
-    df = pd.read_csv(url)
+st.sidebar.header("다이아몬드 스펙 입력")
+# 수치형 데이터 입력
+carat = st.sidebar.number_input("Carat (중량)", min_value=0.2, max_value=5.0, value=1.0, step=0.01)
+depth = st.sidebar.slider("Depth (%)", min_value=43.0, max_value=79.0, value=61.8, step=0.1)
+table = st.sidebar.slider("Table (%)", min_value=43.0, max_value=95.0, value=57.0, step=0.1)
 
-    # 1. 필수 데이터 결측치 제거
-    df = df.dropna(
-        subset=[
-            "movieCd",
-            "movieNm",
-            "total_audi",
-            "first_scrn",
-            "first_week_audi",
-        ]
-    )
+# 범주형 데이터 입력
+cut = st.sidebar.selectbox("Cut (연마 등급)", artifact['cut_categories'])
+color = st.sidebar.selectbox("Color (색상)", artifact['color_categories'])
+clarity = st.sidebar.selectbox("Clarity (투명도)", artifact['clarity_categories'])
 
-    # 2. 장르 및 국가 결측치 처리
-    df["main_genre"] = (
-        df["genre"].dropna().astype(str).apply(lambda x: x.split("|")[0])
-    )
-    df["main_genre"] = df["main_genre"].fillna("미분류")
-
-    df["nation"] = df["nation"].fillna("기타")
-
-    # 3. 고유 식별자(movieCd) 기준 중복 제거
-    df = df.drop_duplicates(subset=["movieCd"])
-
-    # 4. 트리맵용 고유 라벨 생성
-    df["movie_label"] = df["movieNm"] + " (" + df["movieCd"].astype(str) + ")"
-
-    return df
-
-
-df = load_data()
-
-# ---------------------------------------------------------
-# 1. 장르별 영화 편수 (도넛 그래프)
-# ---------------------------------------------------------
-st.header("1. 장르별 영화 편수 분포")
-
-genre_counts = df["main_genre"].value_counts().reset_index(name="count")
-genre_counts.columns = ["genre", "count"]
-
-fig1 = px.pie(
-    genre_counts,
-    names="genre",
-    values="count",
-    hole=0.4,
-    title="장르별 영화 편수 비율",
-)
-
-fig1.update_traces(
-    hovertemplate="<b>장르: %{label}</b><br>편수: %{value}편<br>비율: %{percent}"
-)
-
-st.plotly_chart(fig1, use_container_width=True)
-
-st.divider()
-st.subheader("💡 이 그래프로 알 수 있는 것")
-st.write(
-    "박스오피스 상위권 영화 중 특정 주요 장르가 차지하는 비중과 장르별 편수 분포를 한눈에 비교할 수 있습니다."
-)
-st.divider()
-
-# ---------------------------------------------------------
-# 2. 장르 안의 영화 (트리맵)
-# ---------------------------------------------------------
-st.header("2. 장르 안의 영화 (트리맵)")
-
-fig2 = px.treemap(
-    df,
-    path=["main_genre", "movie_label"],
-    values="total_audi",
-    title="장르 및 영화별 총 관객 수 분포",
-    hover_data={"movieNm": True, "total_audi": ":,.0f", "movie_label": False},
-)
-
-fig2.update_traces(
-    hovertemplate="<b>영화명: %{customdata[0]}</b><br>총 관객 수: %{value:,.0f}명"
-)
-
-st.plotly_chart(fig2, use_container_width=True)
-
-st.divider()
-st.subheader("💡 이 그래프로 알 수 있는 것")
-st.write(
-    "장르 전체에서 각 장르와 개별 영화가 차지하는 총 관객 수 비중을 면적 크기로 직관적으로 파악할 수 있습니다."
-)
-st.divider()
-
-# ---------------------------------------------------------
-# 3. 총 관객 수 분포 (히스토그램)
-# ---------------------------------------------------------
-st.header("3. 총 관객 수 분포 히스토그램")
-
-fig3 = px.histogram(
-    df,
-    x="total_audi",
-    nbins=30,
-    title="총 관객 수 구간별 영화 편수 분포",
-    labels={"total_audi": "총 관객 수(명)"},
-)
-
-fig3.update_layout(yaxis_title_text="영화 편수(개)")
-
-fig3.update_traces(
-    hovertemplate="<b>관객 수 구간: %{x:,.0f}명 주변</b><br>영화 편수: %{y}편"
-)
-
-st.plotly_chart(fig3, use_container_width=True)
-
-# 데이터 자동 계산 (텍스트 출력용)
-max_audi_movie = df.loc[df["total_audi"].idxmax()]
-max_title = max_audi_movie["movieNm"]
-max_audi_val = max_audi_movie["total_audi"]
-
-under_3m_count = len(df[df["total_audi"] < 3000000])
-under_3m_ratio = (under_3m_count / len(df)) * 100
-
-st.divider()
-st.subheader("💡 이 그래프로 알 수 있는 것")
-st.write(
-    f"대부분의 영화({under_3m_ratio:.1f}%)가 **총 관객 수 300만 명 미만 구간**에 밀집해 있으며, "
-    f"가장 관객이 많은 영화는 **'{max_title}'**(약 {max_audi_val:,.0f}명)입니다."
-)
-st.divider()
-
-# ---------------------------------------------------------
-# 4. 개봉일 스크린 수와 총 관객 수의 관계 (산점도)
-# ---------------------------------------------------------
-st.header("4. 개봉일 스크린 수와 총 관객 수의 상관관계")
-
-fig4 = px.scatter(
-    df,
-    x="first_scrn",
-    y="total_audi",
-    color="main_genre",
-    hover_name="movieNm",
-    title="개봉일 스크린 수 vs 총 관객 수 관계",
-    labels={
-        "first_scrn": "개봉일 스크린 수(개)",
-        "total_audi": "총 관객 수(명)",
-        "main_genre": "장르",
-    },
-)
-
-fig4.update_traces(
-    hovertemplate="<b>영화명: %{hovertext}</b><br>개봉일 스크린 수: %{x:,.0f}개<br>총 관객 수: %{y:,.0f}명"
-)
-
-st.plotly_chart(fig4, use_container_width=True)
-
-st.divider()
-st.subheader("💡 이 그래프로 알 수 있는 것")
-st.write(
-    "개봉 초기에 확보한 스크린 수가 많을수록 대체로 최종 총 관객 수가 늘어나는 **양의 상관관계**를 볼 수 있으며, 장르별 스크린 배정 규모 및 흥행 성과 차이도 비교할 수 있습니다."
-)
-st.divider()
-
-# ---------------------------------------------------------
-# 5. 주요 장르별 총 관객 수 박스플롯 (10편 이상)
-# ---------------------------------------------------------
-st.header("5. 주요 장르별 총 관객 수 분포 (상자 그림)")
-
-genre_counts_series = df["main_genre"].value_counts()
-top_genres = genre_counts_series[genre_counts_series >= 10].index
-
-df_top_genres = df[df["main_genre"].isin(top_genres)]
-
-fig5 = px.box(
-    df_top_genres,
-    x="main_genre",
-    y="total_audi",
-    color="main_genre",
-    hover_name="movieNm",
-    points="outliers",
-    title="영화 10편 이상 장르의 총 관객 수 분포 (박스플롯)",
-    labels={
-        "main_genre": "장르",
-        "total_audi": "총 관객 수(명)",
-    },
-)
-
-fig5.update_traces(
-    hovertemplate="<b>영화명: %{hovertext}</b><br>총 관객 수: %{y:,.0f}명"
-)
-
-st.plotly_chart(fig5, use_container_width=True)
-
-st.divider()
-st.subheader("💡 이 그래프로 알 수 있는 것")
-st.write(
-    "주요 장르별 관객 수의 중앙값과 범위를 비교하여 흥행의 안정성을 확인하고, 상자 밖으로 벗어난 아웃라이어 점을 통해 특정 장르의 대박 흥행작을 한눈에 식별할 수 있습니다."
-)
-st.divider()
-
-# ---------------------------------------------------------
-# 6. 개봉일 스크린 수, 총 관객 수, 첫 주 관객 수 (버블 그래프)
-# ---------------------------------------------------------
-st.header("6. 스크린 수, 총 관객 수, 첫 주 관객 수의 관계 (버블 차트)")
-
-fig6 = px.scatter(
-    df,
-    x="first_scrn",
-    y="total_audi",
-    size="first_week_audi",
-    color="main_genre",
-    hover_name="movieNm",
-    title="개봉일 스크린 수 vs 총 관객 수 (버블 크기: 개봉 첫 주 관객 수)",
-    labels={
-        "first_scrn": "개봉일 스크린 수(개)",
-        "total_audi": "총 관객 수(명)",
-        "first_week_audi": "개봉 첫 주 관객 수(명)",
-        "main_genre": "장르",
-    },
-    size_max=50,
-)
-
-fig6.update_traces(
-    hovertemplate="<b>영화명: %{hovertext}</b><br>"
-    + "개봉일 스크린 수: %{x:,.0f}개<br>"
-    + "총 관객 수: %{y:,.0f}명<br>"
-    + "개봉 첫 주 관객 수: %{marker.size:,.0f}명"
-)
-
-st.plotly_chart(fig6, use_container_width=True)
-
-st.divider()
-st.subheader("💡 이 그래프로 알 수 있는 것")
-st.write(
-    "개봉일 스크린 수(X축)와 총 관객 수(Y축)에 더해 **개봉 첫 주 관객 수(버블 크기)**까지 함께 비교함으로써, 초기 흥행(첫 주 관객)이 최종 흥행으로 연결되는 양상을 다차원적으로 분석할 수 있습니다."
-)
-st.divider()
-
-# ---------------------------------------------------------
-# 7. 제작 국가 및 장르별 영화 편수 (선버스트 그래프)
-# ---------------------------------------------------------
-st.header("7. 제작 국가 및 장르별 영화 편수 분포 (선버스트)")
-
-fig7 = px.sunburst(
-    df,
-    path=["nation", "main_genre"],
-    title="제작 국가 및 장르별 영화 편수 분포",
-)
-
-fig7.update_traces(
-    hovertemplate="<b>구분: %{label}</b><br>영화 편수: %{value}편<br>비율: %{percentParent:.1%}"
-)
-
-st.plotly_chart(fig7, use_container_width=True)
-
-st.divider()
-st.subheader("💡 이 그래프로 알 수 있는 것")
-st.write(
-    "제작 국가(내부 링)와 그 안의 장르(외부 링) 계층 구조를 통해, 특정 국가에서 어떤 장르의 영화가 주로 수입되거나 제작되어 박스오피스 상위권에 진입했는지 영화 편수 비율로 확인할 수 있습니다."
-)
-st.divider()
-
-# ---------------------------------------------------------
-# 8. 한 국가에서 영화 편수당 총 관객 수는 어떻게 될까? (막대 그래프)
-# ---------------------------------------------------------
-title_q8 = "한 국가에서 영화 편수당 총 관객 수는 어떻게 될까?"
-st.header(f"8. {title_q8}")
-
-# 국가별 총 관객 수, 개봉 편수, 평균 관객 수 집계
-nation_stats = (
-    df.groupby("nation")
-    .agg(
-        total_audi=("total_audi", "sum"),
-        movie_count=("movieCd", "count"),
-        avg_audi=("total_audi", "mean"),
-    )
-    .reset_index()
-)
-
-# 평균 관객 수 내림차순 정렬
-nation_stats = nation_stats.sort_values(by="avg_audi", ascending=False)
-
-fig8 = px.bar(
-    nation_stats,
-    x="nation",
-    y="avg_audi",
-    color="avg_audi",
-    title=title_q8,
-    labels={
-        "nation": "제작 국가",
-        "avg_audi": "편당 평균 관객 수(명)",
-        "total_audi": "총 관객 수(명)",
-        "movie_count": "개봉 영화 편수(편)",
-    },
-    hover_data={
-        "total_audi": ":,.0f",
-        "movie_count": True,
-        "avg_audi": ":,.0f",
-    },
-    color_continuous_scale="Viridis",
-)
-
-fig8.update_traces(
-    hovertemplate="<b>국가: %{x}</b><br>"
-    + "편당 평균 관객 수: %{y:,.0f}명<br>"
-    + "총 개봉 편수: %{customdata[1]}편<br>"
-    + "합계 관객 수: %{customdata[0]:,.0f}명"
-)
-
-fig8.update_layout(coloraxis_showscale=False)
-
-st.plotly_chart(fig8, use_container_width=True)
-
-st.divider()
-st.subheader("💡 이 그래프로 알 수 있는 것")
-st.write(
-    "개봉 편수가 많은 국가라도 영화 1편당 끌어모은 평균 관객 수(흥행 효율)는 다를 수 있습니다. "
-    "국가별 평균 동원력을 비교함으로써 특정 국가 영화의 국내 흥행 영향력과 알짜 흥행 여부를 파악할 수 있습니다."
-)
-st.divider()
+# 3. 예측 실행
+if st.sidebar.button("가격 예측하기"):
+    # 입력용 빈 데이터프레임 생성 (모든 값을 0으로 초기화)
+    input_data = pd.DataFrame(0.0, index=[0], columns=feature_cols)
+    
+    # 수치형 변수 맵핑 (로그 변환 포함)
+    input_data['log_carat'] = np.log(carat)
+    input_data['depth'] = depth
+    input_data['table'] = table
+    
+    # 범주형 변수 맵핑 (One-Hot Encoding 방식)
+    if f'cut_{cut}' in feature_cols:
+        input_data[f'cut_{cut}'] = 1.0
+    if f'color_{color}' in feature_cols:
+        input_data[f'color_{color}'] = 1.0
+    if f'clarity_{clarity}' in feature_cols:
+        input_data[f'clarity_{clarity}'] = 1.0
+        
+    # 모델 예측 및 지수 변환(달러 환산)
+    pred_log = model.predict(input_data)[0]
+    pred_usd = np.exp(pred_log)
+    
+    st.success(f"### 🎯 예상 가격: **${pred_usd:,.2f}**")
+    st.info(f"💡 모델 평가 성능: R² {artifact['metrics']['r2_usd']:.3f} / 평균 오차 {artifact['metrics']['mape_pct']:.1f}%")
